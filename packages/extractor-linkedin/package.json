@@ -1,0 +1,14 @@
+{
+  "name": "@liex/extractor-linkedin",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@liex/schema": "workspace:*",
+    "@liex/extractor-core": "workspace:*"
+  }
+}

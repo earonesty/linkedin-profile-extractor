@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/schema" },
+    { "path": "../../packages/extractor-core" },
+    { "path": "../../packages/extractor-linkedin" },
+    { "path": "../../packages/ui-overlay" },
+    { "path": "../../packages/transport-download" },
+    { "path": "../../packages/transport-clipboard" },
+    { "path": "../../packages/transport-webhook" }
+  ]
+}

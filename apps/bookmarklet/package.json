@@ -1,0 +1,19 @@
+{
+  "name": "@liex/bookmarklet",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node ../../scripts/build-bookmarklet.mjs"
+  },
+  "dependencies": {
+    "@liex/schema": "workspace:*",
+    "@liex/extractor-core": "workspace:*",
+    "@liex/extractor-linkedin": "workspace:*",
+    "@liex/ui-overlay": "workspace:*",
+    "@liex/transport-download": "workspace:*",
+    "@liex/transport-clipboard": "workspace:*",
+    "@liex/transport-webhook": "workspace:*"
+  }
+}

@@ -1,0 +1,174 @@
+#!/usr/bin/env node
+
+/**
+ * Build script for the bookmarklet.
+ *
+ * Emits:
+ *   apps/bookmarklet/dist/runtime.js       — the hosted runtime bundle
+ *   apps/bookmarklet/dist/bookmarklet.js    — the loader string
+ *   apps/bookmarklet/dist/index.html        — human-installable bookmarklet page
+ */
+
+import * as esbuild from "esbuild";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const root = path.resolve(__dirname, "..");
+const distDir = path.join(root, "apps/bookmarklet/dist");
+
+const RUNTIME_URL =
+  process.env.LIEX_RUNTIME_URL ?? "https://example.com/liex/runtime.js";
+
+async function build() {
+  fs.mkdirSync(distDir, { recursive: true });
+
+  // 1. Build the hosted runtime bundle
+  await esbuild.build({
+    entryPoints: [path.join(root, "apps/bookmarklet/src/runtime.ts")],
+    bundle: true,
+    minify: true,
+    format: "iife",
+    target: "es2020",
+    outfile: path.join(distDir, "runtime.js"),
+    alias: {
+      "@liex/schema": path.join(root, "packages/schema/src"),
+      "@liex/extractor-core": path.join(root, "packages/extractor-core/src"),
+      "@liex/extractor-linkedin": path.join(
+        root,
+        "packages/extractor-linkedin/src"
+      ),
+      "@liex/ui-overlay": path.join(root, "packages/ui-overlay/src"),
+      "@liex/transport-download": path.join(
+        root,
+        "packages/transport-download/src"
+      ),
+      "@liex/transport-clipboard": path.join(
+        root,
+        "packages/transport-clipboard/src"
+      ),
+      "@liex/transport-webhook": path.join(
+        root,
+        "packages/transport-webhook/src"
+      ),
+    },
+  });
+
+  // 2. Build the bookmarklet loader
+  const loaderSource = fs.readFileSync(
+    path.join(root, "apps/bookmarklet/src/loader.ts"),
+    "utf-8"
+  );
+
+  const loaderResult = await esbuild.transform(loaderSource, {
+    loader: "ts",
+    minify: true,
+    target: "es2020",
+  });
+
+  // Replace the placeholder with the configured runtime URL
+  const loaderCode = loaderResult.code
+    .replace("%%RUNTIME_URL%%", RUNTIME_URL)
+    .trim();
+
+  const bookmarklet = `javascript:${encodeURIComponent(loaderCode)}`;
+  fs.writeFileSync(path.join(distDir, "bookmarklet.js"), bookmarklet);
+
+  // 3. Generate the installable HTML page
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinkedIn Profile Extractor — Bookmarklet</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      color: #222;
+      line-height: 1.6;
+    }
+    h1 { margin-bottom: 8px; }
+    .subtitle { color: #666; margin-bottom: 32px; }
+    .bookmarklet-link {
+      display: inline-block;
+      background: #0a66c2;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 16px 0;
+      cursor: grab;
+    }
+    .bookmarklet-link:hover { background: #004182; }
+    .instructions { margin-top: 24px; }
+    .instructions h2 { margin-top: 24px; margin-bottom: 8px; }
+    .instructions ol { padding-left: 24px; }
+    .instructions li { margin-bottom: 8px; }
+    code {
+      background: #f0f0f0;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+    .warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <h1>LinkedIn Profile Extractor</h1>
+  <p class="subtitle">Extract structured data from any LinkedIn profile page.</p>
+
+  <p>Drag this link to your bookmarks bar:</p>
+  <a class="bookmarklet-link" href="${bookmarklet}">Extract LinkedIn Profile</a>
+
+  <div class="instructions">
+    <h2>How to install</h2>
+    <ol>
+      <li>Drag the blue button above to your browser's bookmarks bar.</li>
+      <li>If your bookmarks bar is hidden, press <code>Ctrl+Shift+B</code> (Windows/Linux) or <code>Cmd+Shift+B</code> (Mac) to show it.</li>
+      <li>Alternatively, right-click the button and choose "Bookmark this link".</li>
+    </ol>
+
+    <h2>How to use</h2>
+    <ol>
+      <li>Navigate to any LinkedIn profile page (e.g., <code>linkedin.com/in/someone</code>).</li>
+      <li>Click the bookmarklet in your bookmarks bar.</li>
+      <li>Wait for the extraction overlay to appear.</li>
+      <li>Use the buttons to copy JSON, download JSON, or send to a webhook.</li>
+    </ol>
+
+    <div class="warning">
+      <strong>Limitations:</strong> Some browsers or LinkedIn pages may block the bookmarklet
+      due to Content Security Policy (CSP). If the bookmarklet doesn't load, try using the
+      companion Chrome extension instead. The bookmarklet extracts only data visible in your
+      current browser session — it does not access LinkedIn APIs or automate your account.
+    </div>
+  </div>
+</body>
+</html>`;
+
+  fs.writeFileSync(path.join(distDir, "index.html"), html);
+
+  console.log("Build complete:");
+  console.log(`  Runtime bundle: ${path.join(distDir, "runtime.js")}`);
+  console.log(`  Bookmarklet:    ${path.join(distDir, "bookmarklet.js")}`);
+  console.log(`  Install page:   ${path.join(distDir, "index.html")}`);
+  console.log(`  Runtime URL:    ${RUNTIME_URL}`);
+}
+
+build().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
