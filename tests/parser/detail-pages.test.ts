@@ -58,6 +58,41 @@ describe("detail page parsing", () => {
       const withDates = items.filter((i) => i.date_range_raw);
       expect(withDates.length).toBeGreaterThanOrEqual(3);
     });
+
+    it("filters out page heading as item", () => {
+      const doc = loadFixture("details-experience.xml");
+      const items = parseDetailPage(doc, "experience") as Array<{
+        title: string | null;
+      }>;
+      expect(items.every((i) => i.title !== "Experience")).toBe(true);
+    });
+
+    it("description is real content, not company+type line", () => {
+      const doc = loadFixture("details-experience.xml");
+      const items = parseDetailPage(doc, "experience") as Array<{
+        description: string | null;
+      }>;
+      for (const item of items) {
+        if (item.description) {
+          expect(item.description).not.toMatch(/·\s*(full-time|part-time|contract)/i);
+        }
+      }
+    });
+
+    it("excludes skill endorsement text from all fields", () => {
+      const doc = loadFixture("details-experience.xml");
+      const items = parseDetailPage(doc, "experience") as Array<{
+        title: string | null;
+        location: string | null;
+        description: string | null;
+      }>;
+      for (const item of items) {
+        const fields = [item.title, item.location, item.description].filter(Boolean);
+        for (const f of fields) {
+          expect(f).not.toMatch(/and \+\d+ skills?$/i);
+        }
+      }
+    });
   });
 
   describe("parseDetailPage - education", () => {
@@ -75,6 +110,18 @@ describe("detail page parsing", () => {
       const schools = items.map((i) => i.school).filter(Boolean);
       expect(schools.some((s) => s!.includes("Johns Hopkins"))).toBe(true);
     });
+
+    it("does not use duplicate degree text as description", () => {
+      const doc = loadFixture("details-education.xml");
+      const items = parseDetailPage(doc, "education") as Array<{
+        school: string | null;
+        description: string | null;
+      }>;
+      const jhu = items.find((i) => i.school?.includes("Johns Hopkins"));
+      if (jhu?.description) {
+        expect(jhu.description).not.toBe("M.S. Bioinformatics");
+      }
+    });
   });
 
   describe("parseDetailPage - skills", () => {
@@ -90,6 +137,16 @@ describe("detail page parsing", () => {
       const items = parseDetailPage(doc, "skills") as string[];
       expect(items).toContain("Machine Learning");
       expect(items).toContain("Python");
+    });
+
+    it("excludes job titles and endorsement meta text", () => {
+      const doc = loadFixture("details-skills.xml");
+      const items = parseDetailPage(doc, "skills") as string[];
+      for (const skill of items) {
+        expect(skill).not.toMatch(/\bat\b.*\b(Bloomberg|Atakama|Puzzle)\b/i);
+        expect(skill).not.toMatch(/endorsement/i);
+        expect(skill).not.toMatch(/\d+ experiences/i);
+      }
     });
   });
 
@@ -107,6 +164,18 @@ describe("detail page parsing", () => {
       }>;
       const names = items.map((i) => i.name).filter(Boolean);
       expect(names.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("description is not 'Associated with' text", () => {
+      const doc = loadFixture("details-projects.xml");
+      const items = parseDetailPage(doc, "projects") as Array<{
+        description: string | null;
+      }>;
+      for (const item of items) {
+        if (item.description) {
+          expect(item.description).not.toMatch(/^associated with/i);
+        }
+      }
     });
   });
 
@@ -132,6 +201,18 @@ describe("detail page parsing", () => {
       const doc = loadFixture("details-courses.xml");
       const items = parseDetailPage(doc, "courses");
       expect(items.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it("course number is not 'Associated with' text", () => {
+      const doc = loadFixture("details-courses.xml");
+      const items = parseDetailPage(doc, "courses") as Array<{
+        number: string | null;
+      }>;
+      for (const course of items) {
+        if (course.number) {
+          expect(course.number).not.toMatch(/^associated with/i);
+        }
+      }
     });
   });
 
