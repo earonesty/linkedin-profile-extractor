@@ -190,7 +190,7 @@ export async function fetchAndParseDetailPages(
       }
 
       // Keep focus on the main window
-      try { popup.blur(); window.focus(); } catch {};
+      try { popup.blur(); window.focus(); } catch { /* ignore */ }
 
       const accessible = await waitForAccess(popup);
       if (!accessible) {
