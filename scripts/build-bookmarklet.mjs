@@ -54,14 +54,16 @@ async function build() {
     alias: aliases,
   });
 
-  // 2. Inline the runtime into a javascript: URL
+  // 2. Inline the runtime into javascript: URLs (with and without detail pages)
   const runtimeCode = fs.readFileSync(
     path.join(distDir, "runtime.js"),
     "utf-8"
   );
   const bookmarklet = `javascript:void%20${encodeURIComponent(`(function(){${runtimeCode}})()`)}`;
+  const bookmarkletFull = `javascript:void%20${encodeURIComponent(`(function(){window.__LIEX_CONFIG=window.__LIEX_CONFIG||{};window.__LIEX_CONFIG.fetchDetailPages=true;${runtimeCode}})()`)}`;
 
   fs.writeFileSync(path.join(distDir, "bookmarklet.js"), bookmarklet);
+  fs.writeFileSync(path.join(distDir, "bookmarklet-full.js"), bookmarkletFull);
 
   // 3. Generate the installable HTML page
   const html = `<!DOCTYPE html>
@@ -127,9 +129,35 @@ async function build() {
   <p class="subtitle">Extract structured data from any LinkedIn profile page.</p>
 
   <p>Drag this link to your bookmarks bar:</p>
-  <a class="bookmarklet-link" href="${bookmarklet}">Extract LinkedIn Profile</a>
+  <a class="bookmarklet-link" id="bookmarklet-link" href="${bookmarklet}">Extract LinkedIn Profile</a>
+
+  <div style="margin-top:16px;display:flex;align-items:center;gap:12px;">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px;">
+      <span style="position:relative;display:inline-block;width:44px;height:24px;">
+        <input type="checkbox" id="detail-toggle" style="opacity:0;width:0;height:0;">
+        <span id="slider" style="position:absolute;inset:0;background:#ccc;border-radius:24px;transition:.2s;"></span>
+        <span id="slider-knob" style="position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:.2s;"></span>
+      </span>
+      Fetch all detail pages <span style="color:#666;">(gets complete data for each section)</span>
+    </label>
+  </div>
 
   <div class="note">Self-contained bookmarklet — no external scripts are loaded.</div>
+
+  <script>
+    var basic = ${JSON.stringify(bookmarklet)};
+    var full = ${JSON.stringify(bookmarkletFull)};
+    var link = document.getElementById("bookmarklet-link");
+    var toggle = document.getElementById("detail-toggle");
+    var slider = document.getElementById("slider");
+    var knob = document.getElementById("slider-knob");
+    toggle.addEventListener("change", function() {
+      link.href = toggle.checked ? full : basic;
+      link.textContent = toggle.checked ? "Extract LinkedIn Profile (Full)" : "Extract LinkedIn Profile";
+      slider.style.background = toggle.checked ? "#0a66c2" : "#ccc";
+      knob.style.left = toggle.checked ? "22px" : "2px";
+    });
+  </script>
 
   <div class="instructions">
     <h2>How to install</h2>
