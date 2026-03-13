@@ -1,10 +1,11 @@
+import { getCleanPTexts } from "./dom-utils";
 import type { TopCard } from "@liex/schema";
 
 /**
  * Parses the LinkedIn profile top card.
  *
  * Real LinkedIn DOM uses:
- * - h2 (not h1) for the profile name
+ * - h1 or h2 for the profile name
  * - <p> tags for headline, org/school line, location
  * - <a> with href containing "contact-info" for contact link
  * - <a data-view-name="profile-top-card-view-all-connections"> for connections
@@ -24,18 +25,17 @@ export function parseTopCard(el: Element): TopCard {
   );
   const cover_image_url = coverImg?.getAttribute("src") ?? null;
 
-  // Full name - LinkedIn uses h2 (not h1) for the profile name
-  // Try h1 first for compatibility, then h2
+  // Full name - LinkedIn uses h1 or h2 for the profile name
   const nameEl = el.querySelector("h1") ?? el.querySelector("h2");
   const full_name = nameEl?.textContent?.trim() ?? null;
 
-  // Contact info link
+  // Contact info link — structural: link href contains "contact-info"
   const contactLink = el.querySelector(
     'a[href*="overlay/contact-info"], a[href*="contact-info"]'
   );
   const contact_info_link = contactLink?.getAttribute("href") ?? null;
 
-  // Connections text - in a link with data-view-name or matching text pattern
+  // Connections text — structural: link with specific data-view-name attribute
   let connections_text: string | null = null;
   const connectionsLink = el.querySelector(
     'a[data-view-name="profile-top-card-view-all-connections"]'
@@ -44,7 +44,7 @@ export function parseTopCard(el: Element): TopCard {
     connections_text = connectionsLink.textContent?.trim() ?? null;
   }
   if (!connections_text) {
-    // Fallback: scan p tags for connections pattern
+    // Fallback: scan p tags for connections pattern (number + connections/followers)
     const ps = el.querySelectorAll("p");
     for (const p of Array.from(ps)) {
       const t = (p.textContent ?? "").trim();
@@ -55,36 +55,24 @@ export function parseTopCard(el: Element): TopCard {
     }
   }
 
-  // Headline, org/school line, and location are in <p> tags
-  // In the real DOM, the first few <p> tags after the name area contain:
-  //   p[0]: headline (e.g., "Senior Software Engineer @ Puzzle | ML, Architecture")
-  //   p[1]: org/school line (e.g., "Puzzle 🧩🚀 · The Johns Hopkins University")
-  //   p[2]: location (e.g., "Oak Park, California, United States")
-  //   p[3]: "·" separator
-  //   p[4]: "Contact info" link wrapper
+  // Use getCleanPTexts which strips buttons ("Open to", "Add section"),
+  // /details/ nav links ("Show all"), and other UI chrome
+  const pTexts = getCleanPTexts(el);
+
   let headline: string | null = null;
   let org_school_line: string | null = null;
   let location: string | null = null;
 
-  const allPs = el.querySelectorAll("p");
-  const candidateTexts: Array<{ text: string; el: Element }> = [];
-
-  for (const p of Array.from(allPs)) {
-    const text = (p.textContent ?? "").trim();
-    if (!text || text.length < 2) continue;
+  for (const text of pTexts) {
+    // Skip text that duplicates the name
     if (text === full_name) continue;
+    // Skip connections text (structural: contains digit + connections/followers)
     if (/\d+\+?\s*(connections?|followers?)/i.test(text)) continue;
-    if (/^contact\s+info$/i.test(text)) continue;
-    if (/^(open to|add section|show details|show all)$/i.test(text)) continue;
-    if (/profile views?|post impressions?|search appearances?/i.test(text)) continue;
-    if (/^·\s*\d+(st|nd|rd|th)$/i.test(text)) continue; // connection degree ("· 1st", "· 2nd")
-    if (/mutual connection/i.test(text)) continue;
-    if (/enhanced with premium/i.test(text)) continue;
-    candidateTexts.push({ text, el: p });
-  }
+    // Skip connection degree indicators (structural: "· 1st", "· 2nd")
+    if (/^·\s*\d+(st|nd|rd|th)$/i.test(text)) continue;
+    // Skip very short separator text
+    if (text.length < 3) continue;
 
-  // Assign based on order and heuristics
-  for (const { text } of candidateTexts) {
     if (!headline) {
       headline = text;
     } else if (!org_school_line && text.includes("·")) {

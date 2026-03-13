@@ -10,6 +10,7 @@ import { createOverlay } from "@liex/ui-overlay";
 import { downloadProfile } from "@liex/transport-download";
 import { copyProfile } from "@liex/transport-clipboard";
 import { postProfile } from "@liex/transport-webhook";
+import { stripRawHtml } from "@liex/schema";
 import type { LinkedInExport, WebhookConfig } from "@liex/schema";
 import { getConfig } from "./config";
 
@@ -33,14 +34,26 @@ async function run(): Promise<void> {
     overlay.setActions({
       onCopy: async () => {
         if (!result) return;
-        const ok = await copyProfile(result);
+        const ok = await copyProfile(stripRawHtml(result));
         overlay.setState("complete", ok ? "Copied to clipboard!" : "Copy failed");
+      },
+
+      onCopyFull: async () => {
+        if (!result) return;
+        const ok = await copyProfile(result);
+        overlay.setState("complete", ok ? "Copied (with raw HTML)!" : "Copy failed");
       },
 
       onDownload: () => {
         if (!result) return;
-        downloadProfile(result);
+        downloadProfile(stripRawHtml(result));
         overlay.setState("complete", "Download started");
+      },
+
+      onDownloadFull: () => {
+        if (!result) return;
+        downloadProfile(result);
+        overlay.setState("complete", "Download started (with raw HTML)");
       },
 
       onWebhook: config.webhookEndpoint

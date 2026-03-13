@@ -70,12 +70,24 @@ export function discoverSections(
     warnings.push("Top card not found via data-view-name anchor");
   }
 
+  // Sections that are LinkedIn UI chrome, not profile content
+  const IGNORED_SECTIONS = new Set([
+    "highlights",
+    "insights",
+    "pymk-recommendation-from-company",
+    "pymk-recommendation-from-industry",
+    "company-recommendation",
+    "browsemap",
+    "promo",
+  ]);
+
   // Step 2: Find profile-card-* sections
   const found = new Map<string, DiscoveredSection>();
   const cardEls = doc.querySelectorAll('[data-view-name^="profile-card-"]');
   for (const el of Array.from(cardEls)) {
     const anchor = el.getAttribute("data-view-name")!;
     const id = anchorToId(anchor);
+    if (IGNORED_SECTIONS.has(id)) continue;
     if (!found.has(id)) {
       found.set(id, { id, heading: extractHeading(el), element: el });
     }

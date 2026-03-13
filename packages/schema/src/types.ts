@@ -32,6 +32,7 @@ export type ExtractOptions = {
   onProgress?: (state: string) => void;
   expandSections?: boolean;
   scrollPage?: boolean;
+  includeRawHtml?: boolean;
 };
 
 export type AboutSection = {

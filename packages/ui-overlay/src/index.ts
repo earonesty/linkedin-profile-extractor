@@ -92,7 +92,9 @@ function getStyles(): string {
 
 export type OverlayActions = {
   onCopy?: () => void;
+  onCopyFull?: () => void;
   onDownload?: () => void;
+  onDownloadFull?: () => void;
   onWebhook?: () => void;
 };
 
@@ -146,25 +148,18 @@ export function createOverlay(): {
     actionsEl.innerHTML = "";
     actionsEl.style.display = "flex";
 
-    if (actions.onCopy) {
+    const buttons: Array<{ label: string; handler: () => void }> = [];
+    if (actions.onCopy) buttons.push({ label: "Copy JSON", handler: actions.onCopy });
+    if (actions.onDownload) buttons.push({ label: "Download JSON", handler: actions.onDownload });
+    if (actions.onCopyFull) buttons.push({ label: "Copy Full (+ raw HTML)", handler: actions.onCopyFull });
+    if (actions.onDownloadFull) buttons.push({ label: "Download Full (+ raw HTML)", handler: actions.onDownloadFull });
+    if (actions.onWebhook) buttons.push({ label: "Send to Webhook", handler: actions.onWebhook });
+
+    for (const { label, handler } of buttons) {
       const btn = document.createElement("button");
       btn.className = "liex-btn";
-      btn.textContent = "Copy JSON";
-      btn.addEventListener("click", actions.onCopy);
-      actionsEl.appendChild(btn);
-    }
-    if (actions.onDownload) {
-      const btn = document.createElement("button");
-      btn.className = "liex-btn";
-      btn.textContent = "Download JSON";
-      btn.addEventListener("click", actions.onDownload);
-      actionsEl.appendChild(btn);
-    }
-    if (actions.onWebhook) {
-      const btn = document.createElement("button");
-      btn.className = "liex-btn";
-      btn.textContent = "Send to Webhook";
-      btn.addEventListener("click", actions.onWebhook);
+      btn.textContent = label;
+      btn.addEventListener("click", handler);
       actionsEl.appendChild(btn);
     }
   }

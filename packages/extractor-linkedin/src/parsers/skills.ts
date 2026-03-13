@@ -1,71 +1,60 @@
 import type { SkillsSection } from "@liex/schema";
+import { splitSectionItems } from "./split-items";
 
 /**
  * Parses the skills section from the real LinkedIn DOM.
  *
- * Real structure: skill items are in div groups separated by
- * <hr role="presentation">. Each skill has:
- *   - Skill name in a <p> tag within nested divs
- *   - Endorsement info in a role="list" below
+ * Real structure: skill items separated by <hr role="presentation">.
+ * Each item has <p> tags at varying nesting depths:
+ *   - Skill name: shallowest <p> (e.g., depth 6)
+ *   - Meta text: deeper <p> tags (endorsements, related experience)
  *
- * The first <p> in each item group is the skill name.
+ * We use the shallowest <p> in each item as the skill name —
+ * this is more robust than pattern-matching on job titles.
  */
 export function parseSkills(el: Element): SkillsSection {
   const skills: string[] = [];
+  const items = splitSectionItems(el);
 
-  // Strategy 1: Split by <hr> separators (real LinkedIn DOM)
-  const hrs = el.querySelectorAll('hr[role="presentation"]');
-  if (hrs.length > 0) {
-    const firstHr = hrs[0];
-    const container = firstHr.parentElement;
-    if (container) {
-      for (const child of Array.from(container.children)) {
-        if (child.tagName === "HR") continue;
-        const firstP = child.querySelector("p");
-        if (firstP) {
-          const name = firstP.textContent?.trim();
-          if (name && name.length < 100 && !isMetaText(name) && !skills.includes(name)) {
-            skills.push(name);
-          }
-        }
-      }
-    }
-  }
-
-  if (skills.length > 0) return { skills };
-
-  // Strategy 2: Look for <li> elements (fallback)
-  const listItems = el.querySelectorAll("li");
-  for (const li of Array.from(listItems)) {
-    const firstP = li.querySelector("p");
-    const name = firstP?.textContent?.trim() ?? li.textContent?.trim().split("\n")[0]?.trim();
+  for (const item of items) {
+    const name = findShallowestP(item);
     if (name && name.length < 100 && !isMetaText(name) && !skills.includes(name)) {
       skills.push(name);
-    }
-  }
-
-  if (skills.length > 0) return { skills };
-
-  // Strategy 3: Find <p> tags that look like skill names
-  const ps = el.querySelectorAll("p");
-  for (const p of Array.from(ps)) {
-    const text = (p.textContent ?? "").trim();
-    if (
-      text &&
-      text.length < 80 &&
-      text.length > 1 &&
-      !isMetaText(text) &&
-      !skills.includes(text)
-    ) {
-      skills.push(text);
     }
   }
 
   return { skills };
 }
 
+/**
+ * Find the shallowest <p> tag's text content within an element.
+ * In LinkedIn's DOM, the skill name is always less deeply nested
+ * than the endorsement/experience meta text.
+ */
+function findShallowestP(el: Element): string | null {
+  const ps = el.querySelectorAll("p");
+  if (ps.length === 0) return null;
+  if (ps.length === 1) return ps[0].textContent?.trim() ?? null;
+
+  let minDepth = Infinity;
+  let shallowest: Element | null = null;
+
+  for (const p of Array.from(ps)) {
+    let depth = 0;
+    let cur: Element | null = p;
+    while (cur && cur !== el) {
+      depth++;
+      cur = cur.parentElement;
+    }
+    if (depth < minDepth) {
+      minDepth = depth;
+      shallowest = p;
+    }
+  }
+
+  return shallowest?.textContent?.trim() ?? null;
+}
+
 function isMetaText(text: string): boolean {
-  return /^(show all|see more|skills|endorsements?|\d+ endorsements?)$/i.test(text) ||
-    /\bat\b.*\bat\b/i.test(text) || // "Sr. Engineer at Company"
-    /^\d+\s+experiences?\s+at\b/i.test(text); // "6 experiences at Company"
+  return /^(show all|see more|skills|endorsements?)$/i.test(text);
 }

@@ -1,3 +1,5 @@
+import { cleanTextContent, getCleanPTexts } from "./dom-utils";
+
 export type ServicesSection = {
   services_text: string | null;
   service_types: string[];
@@ -14,30 +16,26 @@ export function parseServices(el: Element): ServicesSection {
   let services_text: string | null = null;
   const service_types: string[] = [];
 
-  // Find the description span (first long text)
+  // Find the description span (first long text) — cleanTextContent strips buttons/"…more"
   const spans = el.querySelectorAll("p > span");
   for (const span of Array.from(spans)) {
-    const text = (span.textContent ?? "").trim();
+    const text = cleanTextContent(span);
     if (text.length > 20 && !services_text) {
-      services_text = text.replace(/…\s*(more|see more)\s*$/i, "").trim();
+      services_text = text;
     }
   }
 
-  // Find service type <p> tags (short text, not heading)
-  const ps = el.querySelectorAll("p");
-  for (const p of Array.from(ps)) {
-    const text = (p.textContent ?? "").trim();
+  // Find service type <p> tags (short text, not the description)
+  // getCleanPTexts strips buttons and /details/ nav links
+  const pTexts = getCleanPTexts(el);
+  for (const text of pTexts) {
     if (
       text.length > 2 &&
-      text.length < 80 &&
+      text.length < 60 &&
       text !== services_text &&
-      !/^(services|show all|…|more)$/i.test(text) &&
-      !text.includes("…more")
+      !service_types.includes(text)
     ) {
-      // Check it's not the description
-      if (text.length < 60 && !service_types.includes(text)) {
-        service_types.push(text);
-      }
+      service_types.push(text);
     }
   }
 

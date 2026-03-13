@@ -1,4 +1,5 @@
 import { splitSectionItems } from "./split-items";
+import { getCleanPTexts } from "./dom-utils";
 import type { EducationItem } from "@liex/schema";
 
 /**
@@ -9,12 +10,6 @@ import type { EducationItem } from "@liex/schema";
  *   - School link to /school/ID/
  *   - School logo in <figure> with aria-label="School Name logo"
  *   - <p> tags for: school name, degree+field, date range, grade, activities
- *
- * Example <p> sequence:
- *   <p>The Johns Hopkins University</p>
- *   <p>M.S., Bioinformatics</p>
- *   <p>2009 – 2012</p>
- *   <p>Grade: 3.9</p>
  */
 export function parseEducation(el: Element): EducationItem[] {
   const items: EducationItem[] = [];
@@ -29,13 +24,7 @@ export function parseEducation(el: Element): EducationItem[] {
 }
 
 function parseEducationItem(el: Element): EducationItem | null {
-  const pTags = el.querySelectorAll("p");
-  const pTexts: string[] = [];
-  for (const p of Array.from(pTags)) {
-    const text = (p.textContent ?? "").trim();
-    if (text && text.length > 1) pTexts.push(text);
-  }
-
+  const pTexts = getCleanPTexts(el);
   if (pTexts.length === 0) return null;
 
   // Find school name from figure aria-label or /school/ link
@@ -55,6 +44,8 @@ function parseEducationItem(el: Element): EducationItem | null {
   let description: string | null = null;
 
   for (const text of pTexts) {
+    // Skip text that duplicates the school name we already found
+    if (school && text === school) continue;
     if (isDateRange(text) && !date_range_raw) {
       date_range_raw = text;
     } else if (!school && text.length < 150) {
@@ -69,7 +60,8 @@ function parseEducationItem(el: Element): EducationItem | null {
         degree = text;
       }
     } else if (date_range_raw && !description && text.length > 10) {
-      // Could be grade, activities, or description
+      // Skip text that duplicates degree+field (e.g. "M.S. Bioinformatics")
+      if (isDuplicateDegree(text, degree, field_of_study)) continue;
       description = text;
     }
   }
@@ -77,6 +69,17 @@ function parseEducationItem(el: Element): EducationItem | null {
   if (!school && !degree) return null;
 
   return { school, degree, field_of_study, date_range_raw, description };
+}
+
+function isDuplicateDegree(
+  text: string,
+  degree: string | null,
+  field: string | null
+): boolean {
+  if (!degree) return false;
+  const norm = text.replace(/[,.\s]+/g, " ").trim().toLowerCase();
+  const parts = [degree, field].filter(Boolean).join(" ").replace(/[,.\s]+/g, " ").trim().toLowerCase();
+  return norm === parts;
 }
 
 function isDateRange(text: string): boolean {

@@ -10,6 +10,8 @@ import { parsePublications } from "../../packages/extractor-linkedin/src/parsers
 import { parseCourses } from "../../packages/extractor-linkedin/src/parsers/courses";
 import { parseServices } from "../../packages/extractor-linkedin/src/parsers/services";
 import { parseCertifications } from "../../packages/extractor-linkedin/src/parsers/certifications";
+import { parseRecommendations } from "../../packages/extractor-linkedin/src/parsers/recommendations";
+import { parseActivity } from "../../packages/extractor-linkedin/src/parsers/activity";
 import { discoverSections } from "../../packages/extractor-core/src/section-discovery";
 
 describe("real LinkedIn DOM (earonesty)", () => {
@@ -32,6 +34,17 @@ describe("real LinkedIn DOM (earonesty)", () => {
       expect(ids).toContain("skills");
       expect(ids).toContain("projects");
       expect(ids).toContain("publications");
+    });
+
+    it("excludes LinkedIn UI chrome sections", () => {
+      const warnings: string[] = [];
+      const { sections } = discoverSections(doc, warnings);
+      const ids = sections.map((s) => s.id);
+      expect(ids).not.toContain("highlights");
+      expect(ids).not.toContain("insights");
+      expect(ids).not.toContain("pymk-recommendation-from-company");
+      expect(ids).not.toContain("company-recommendation");
+      expect(ids).not.toContain("promo");
     });
   });
 
@@ -112,6 +125,27 @@ describe("real LinkedIn DOM (earonesty)", () => {
       const items = parseExperience(el);
       expect(items[0].date_range_raw).toContain("2024");
     });
+
+    it("description is real content, not company+type line", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
+      const items = parseExperience(el);
+      for (const item of items) {
+        if (item.description) {
+          // Description should not be a "Company · Full-time" line
+          expect(item.description).not.toMatch(/·\s*(full-time|part-time|contract)/i);
+        }
+      }
+    });
+
+    it("location is not a skills endorsement line", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
+      const items = parseExperience(el);
+      for (const item of items) {
+        if (item.location) {
+          expect(item.location).not.toMatch(/and \+\d+ skills?$/i);
+        }
+      }
+    });
   });
 
   describe("education", () => {
@@ -127,6 +161,26 @@ describe("real LinkedIn DOM (earonesty)", () => {
       const schools = items.map((i) => i.school).filter(Boolean);
       expect(schools.some((s) => s!.includes("Johns Hopkins"))).toBe(true);
     });
+
+    it("extracts degree correctly (not school name)", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-education"]')!;
+      const items = parseEducation(el);
+      const jhu = items.find((i) => i.school?.includes("Johns Hopkins"));
+      expect(jhu).toBeTruthy();
+      expect(jhu!.degree).toBe("M.S.");
+      expect(jhu!.field_of_study).toBe("Bioinformatics");
+    });
+
+    it("does not use duplicate degree text as description", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-education"]')!;
+      const items = parseEducation(el);
+      const jhu = items.find((i) => i.school?.includes("Johns Hopkins"));
+      expect(jhu).toBeTruthy();
+      // "M.S. Bioinformatics" is a duplicate of degree+field, not a real description
+      if (jhu!.description) {
+        expect(jhu!.description).not.toBe("M.S. Bioinformatics");
+      }
+    });
   });
 
   describe("skills", () => {
@@ -135,6 +189,16 @@ describe("real LinkedIn DOM (earonesty)", () => {
       const result = parseSkills(el);
       expect(result.skills.length).toBeGreaterThanOrEqual(1);
       expect(result.skills).toContain("Machine Learning");
+    });
+
+    it("excludes job titles and endorsement meta text", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-skills"]')!;
+      const result = parseSkills(el);
+      for (const skill of result.skills) {
+        expect(skill).not.toMatch(/\bat\b.*\b(Bloomberg|Atakama|Puzzle)\b/i);
+        expect(skill).not.toMatch(/endorsement/i);
+        expect(skill).not.toMatch(/\d+ experiences/i);
+      }
     });
   });
 
@@ -161,6 +225,16 @@ describe("real LinkedIn DOM (earonesty)", () => {
       const result = parseCourses(el);
       expect(result.courses.length).toBeGreaterThanOrEqual(1);
     });
+
+    it("course number is not 'Associated with' text", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-courses"]')!;
+      const result = parseCourses(el);
+      for (const course of result.courses) {
+        if (course.number) {
+          expect(course.number).not.toMatch(/^associated with/i);
+        }
+      }
+    });
   });
 
   describe("services", () => {
@@ -168,6 +242,43 @@ describe("real LinkedIn DOM (earonesty)", () => {
       const el = doc.querySelector('[data-view-name="profile-card-services"]')!;
       const result = parseServices(el);
       expect(result.services_text).toContain("AI/ML");
+    });
+  });
+
+  describe("recommendations", () => {
+    it("returns empty when no real recommendations exist", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-recommendations"]')!;
+      const items = parseRecommendations(el);
+      expect(items).toEqual([]);
+    });
+  });
+
+  describe("activity", () => {
+    it("finds activity items", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-recent-activity"]')!;
+      const result = parseActivity(el);
+      expect(result.activities.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("excludes video player accessibility noise", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-recent-activity"]')!;
+      const result = parseActivity(el);
+      for (const a of result.activities) {
+        expect(a.text).not.toMatch(/^chapters$/i);
+        expect(a.text).not.toMatch(/^captions off/i);
+        expect(a.text).not.toMatch(/^descriptions off/i);
+        expect(a.text).not.toMatch(/^Unknown Captions$/i);
+      }
+    });
+
+    it("strips video player text from within posts", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-recent-activity"]')!;
+      const result = parseActivity(el);
+      for (const a of result.activities) {
+        expect(a.text).not.toContain("Beginning of dialog window");
+        expect(a.text).not.toContain("End of dialog window");
+        expect(a.text).not.toContain("Close Modal Dialog");
+      }
     });
   });
 

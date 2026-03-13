@@ -4,9 +4,9 @@
  * Build script for the bookmarklet.
  *
  * Emits:
- *   apps/bookmarklet/dist/runtime.js       — the hosted runtime bundle
- *   apps/bookmarklet/dist/bookmarklet.js    — the loader string
- *   apps/bookmarklet/dist/index.html        — human-installable bookmarklet page
+ *   apps/bookmarklet/dist/runtime.js       — the runtime bundle (also used by Chrome extension)
+ *   apps/bookmarklet/dist/bookmarklet.js   — self-contained inline bookmarklet string
+ *   apps/bookmarklet/dist/index.html       — human-installable bookmarklet page
  */
 
 import * as esbuild from "esbuild";
@@ -18,13 +18,32 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, "..");
 const distDir = path.join(root, "apps/bookmarklet/dist");
 
-const RUNTIME_URL =
-  process.env.LIEX_RUNTIME_URL ?? "https://example.com/liex/runtime.js";
+const aliases = {
+  "@liex/schema": path.join(root, "packages/schema/src"),
+  "@liex/extractor-core": path.join(root, "packages/extractor-core/src"),
+  "@liex/extractor-linkedin": path.join(
+    root,
+    "packages/extractor-linkedin/src"
+  ),
+  "@liex/ui-overlay": path.join(root, "packages/ui-overlay/src"),
+  "@liex/transport-download": path.join(
+    root,
+    "packages/transport-download/src"
+  ),
+  "@liex/transport-clipboard": path.join(
+    root,
+    "packages/transport-clipboard/src"
+  ),
+  "@liex/transport-webhook": path.join(
+    root,
+    "packages/transport-webhook/src"
+  ),
+};
 
 async function build() {
   fs.mkdirSync(distDir, { recursive: true });
 
-  // 1. Build the hosted runtime bundle
+  // 1. Build the runtime bundle
   await esbuild.build({
     entryPoints: [path.join(root, "apps/bookmarklet/src/runtime.ts")],
     bundle: true,
@@ -32,47 +51,16 @@ async function build() {
     format: "iife",
     target: "es2020",
     outfile: path.join(distDir, "runtime.js"),
-    alias: {
-      "@liex/schema": path.join(root, "packages/schema/src"),
-      "@liex/extractor-core": path.join(root, "packages/extractor-core/src"),
-      "@liex/extractor-linkedin": path.join(
-        root,
-        "packages/extractor-linkedin/src"
-      ),
-      "@liex/ui-overlay": path.join(root, "packages/ui-overlay/src"),
-      "@liex/transport-download": path.join(
-        root,
-        "packages/transport-download/src"
-      ),
-      "@liex/transport-clipboard": path.join(
-        root,
-        "packages/transport-clipboard/src"
-      ),
-      "@liex/transport-webhook": path.join(
-        root,
-        "packages/transport-webhook/src"
-      ),
-    },
+    alias: aliases,
   });
 
-  // 2. Build the bookmarklet loader
-  const loaderSource = fs.readFileSync(
-    path.join(root, "apps/bookmarklet/src/loader.ts"),
+  // 2. Inline the runtime into a javascript: URL
+  const runtimeCode = fs.readFileSync(
+    path.join(distDir, "runtime.js"),
     "utf-8"
   );
+  const bookmarklet = `javascript:void%20${encodeURIComponent(`(function(){${runtimeCode}})()`)}`;
 
-  const loaderResult = await esbuild.transform(loaderSource, {
-    loader: "ts",
-    minify: true,
-    target: "es2020",
-  });
-
-  // Replace the placeholder with the configured runtime URL
-  const loaderCode = loaderResult.code
-    .replace("%%RUNTIME_URL%%", RUNTIME_URL)
-    .trim();
-
-  const bookmarklet = `javascript:${encodeURIComponent(loaderCode)}`;
   fs.writeFileSync(path.join(distDir, "bookmarklet.js"), bookmarklet);
 
   // 3. Generate the installable HTML page
@@ -117,6 +105,14 @@ async function build() {
       border-radius: 4px;
       font-size: 13px;
     }
+    .note {
+      background: #e8f4fd;
+      border: 1px solid #0a66c2;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-top: 16px;
+      font-size: 14px;
+    }
     .warning {
       background: #fff3cd;
       border: 1px solid #ffc107;
@@ -132,6 +128,8 @@ async function build() {
 
   <p>Drag this link to your bookmarks bar:</p>
   <a class="bookmarklet-link" href="${bookmarklet}">Extract LinkedIn Profile</a>
+
+  <div class="note">Self-contained bookmarklet — no external scripts are loaded.</div>
 
   <div class="instructions">
     <h2>How to install</h2>
@@ -150,9 +148,7 @@ async function build() {
     </ol>
 
     <div class="warning">
-      <strong>Limitations:</strong> Some browsers or LinkedIn pages may block the bookmarklet
-      due to Content Security Policy (CSP). If the bookmarklet doesn't load, try using the
-      companion Chrome extension instead. The bookmarklet extracts only data visible in your
+      <strong>Note:</strong> The bookmarklet extracts only data visible in your
       current browser session — it does not access LinkedIn APIs or automate your account.
     </div>
   </div>
@@ -161,11 +157,11 @@ async function build() {
 
   fs.writeFileSync(path.join(distDir, "index.html"), html);
 
+  const sizeKB = (bookmarklet.length / 1024).toFixed(1);
   console.log("Build complete:");
+  console.log(`  Bookmarklet:    ${sizeKB} KB (self-contained)`);
   console.log(`  Runtime bundle: ${path.join(distDir, "runtime.js")}`);
-  console.log(`  Bookmarklet:    ${path.join(distDir, "bookmarklet.js")}`);
   console.log(`  Install page:   ${path.join(distDir, "index.html")}`);
-  console.log(`  Runtime URL:    ${RUNTIME_URL}`);
 }
 
 build().catch((err) => {

@@ -2,7 +2,7 @@
   "name": "linkedin-profile-extractor",
   "version": "0.1.0",
   "private": true,
-  "description": "Client-side LinkedIn profile data extractor \u2014 reusable library and bookmarklet app",
+  "description": "Client-side LinkedIn profile data extractor — reusable library and bookmarklet app",
   "license": "MIT",
   "scripts": {
     "build": "pnpm -r run build",
@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:fixtures": "vitest run tests/parser/",
     "clean": "rm -rf packages/*/dist apps/*/dist",
-    "dev": "LIEX_RUNTIME_URL=http://localhost:3333/runtime.js node scripts/build-bookmarklet.mjs && node scripts/serve-bookmarklet.mjs"
+    "dev": "node scripts/build-bookmarklet.mjs && node scripts/serve-bookmarklet.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
@@ -31,5 +31,6 @@
       "esbuild",
       "@esbuild/*"
     ]
-  }
+  },
+  "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017"
 }

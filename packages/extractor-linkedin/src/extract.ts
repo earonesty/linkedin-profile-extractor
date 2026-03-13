@@ -78,9 +78,11 @@ export async function extractLinkedInProfile(
   progress("normalizing");
   const sections: ExtractedSection[] = [];
 
+  const includeRaw = options?.includeRawHtml ?? true;
+
   for (const disc of discoveredSections) {
-    const raw_html = disc.element.innerHTML;
-    const raw_text = (disc.element.textContent ?? "").trim();
+    const raw_html = includeRaw ? disc.element.innerHTML : "";
+    const raw_text = includeRaw ? (disc.element.textContent ?? "").trim() : "";
 
     let items: unknown[] = [];
     const parser = getParser(disc.id);

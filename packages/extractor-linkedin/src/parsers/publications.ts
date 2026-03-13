@@ -1,4 +1,5 @@
 import { splitSectionItems } from "./split-items";
+import { getCleanPTexts, isNavLink } from "./dom-utils";
 import type { PublicationItem } from "@liex/schema";
 
 /**
@@ -8,7 +9,7 @@ import type { PublicationItem } from "@liex/schema";
  * Each item has:
  *   <p>Title</p>
  *   <p>Publisher · Date</p>
- *   <a href="...redir/redirect/..."><span>Show publication</span></a>
+ *   <a href="...redir/redirect/...">Show publication</a>
  *   <p><span>Description</span></p>
  */
 export function parsePublications(el: Element): PublicationItem[] {
@@ -23,18 +24,14 @@ export function parsePublications(el: Element): PublicationItem[] {
 }
 
 function parsePubItem(el: Element): PublicationItem | null {
-  const pTags = el.querySelectorAll("p");
-  const pTexts: string[] = [];
-  for (const p of Array.from(pTags)) {
-    const text = (p.textContent ?? "").trim();
-    if (text && text.length > 1) pTexts.push(text);
-  }
+  const pTexts = getCleanPTexts(el);
   if (pTexts.length === 0) return null;
 
   // Find URL from redirect link
   let url: string | null = null;
   const links = el.querySelectorAll("a[href]");
   for (const link of Array.from(links)) {
+    if (isNavLink(link)) continue;
     const href = link.getAttribute("href") ?? "";
     if (href.includes("redir/redirect") || (href.startsWith("http") && !href.includes("linkedin.com"))) {
       url = href;
@@ -48,10 +45,7 @@ function parsePubItem(el: Element): PublicationItem | null {
   let description: string | null = null;
 
   for (const text of pTexts) {
-    if (/^(show publication|other authors|show all)$/i.test(text)) continue;
-    if (/…\s*more\s*$/i.test(text) && text.length < 10) continue;
-
-    // Publisher line contains "·" with a date: "Publisher · Jan 18, 2022"
+    // Publisher line contains "·" with a year: "Publisher · Jan 18, 2022"
     if (!publisher && text.includes("·") && /\b\d{4}\b/.test(text)) {
       const parts = text.split("·").map(s => s.trim());
       publisher = parts[0] || null;
@@ -59,7 +53,7 @@ function parsePubItem(el: Element): PublicationItem | null {
     } else if (!title && text.length < 300) {
       title = text;
     } else if (title && !description && text.length > 20) {
-      description = text.replace(/…\s*(more|see more)\s*$/i, "").trim();
+      description = text;
     }
   }
 

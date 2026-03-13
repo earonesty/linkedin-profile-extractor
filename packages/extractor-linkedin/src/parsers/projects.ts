@@ -1,4 +1,5 @@
 import { splitSectionItems } from "./split-items";
+import { getCleanPTexts, isNavLink } from "./dom-utils";
 import type { ProjectItem } from "@liex/schema";
 
 /**
@@ -6,8 +7,7 @@ import type { ProjectItem } from "@liex/schema";
  *
  * Real structure: items separated by <hr role="presentation">.
  * Each item has <p> tags for name, date range, association, description.
- * External project link uses <a href="...redir/redirect/..."> with
- * "Show project" text.
+ * External project link uses LinkedIn's redirect wrapper.
  */
 export function parseProjects(el: Element): ProjectItem[] {
   const items: ProjectItem[] = [];
@@ -21,18 +21,14 @@ export function parseProjects(el: Element): ProjectItem[] {
 }
 
 function parseProjectItem(el: Element): ProjectItem | null {
-  const pTags = el.querySelectorAll("p");
-  const pTexts: string[] = [];
-  for (const p of Array.from(pTags)) {
-    const text = (p.textContent ?? "").trim();
-    if (text && text.length > 1) pTexts.push(text);
-  }
+  const pTexts = getCleanPTexts(el);
   if (pTexts.length === 0) return null;
 
-  // Find external URL from redirect link or direct link
+  // Find external URL: LinkedIn wraps external links through redir/redirect
   let url: string | null = null;
   const links = el.querySelectorAll("a[href]");
   for (const link of Array.from(links)) {
+    if (isNavLink(link)) continue;
     const href = link.getAttribute("href") ?? "";
     if (href.includes("redir/redirect") || (href.startsWith("http") && !href.includes("linkedin.com"))) {
       url = href;
@@ -45,17 +41,19 @@ function parseProjectItem(el: Element): ProjectItem | null {
   let date_range_raw: string | null = null;
 
   for (const text of pTexts) {
-    if (/^show project$/i.test(text)) continue;
-    if (/^associated with\b/i.test(text)) continue;
-    if (/\b\d{4}\b/.test(text) && /[–-]/.test(text) && !date_range_raw) {
+    if (isDateRange(text) && !date_range_raw) {
       date_range_raw = text;
     } else if (!name && text.length < 200) {
       name = text;
     } else if (name && !description && text.length > 10) {
-      description = text.replace(/…\s*(more|see more)\s*$/i, "").trim();
+      description = text;
     }
   }
 
   if (!name) return null;
   return { name, description, date_range_raw, url };
+}
+
+function isDateRange(text: string): boolean {
+  return /\b\d{4}\b/.test(text) && /[–-]/.test(text);
 }
