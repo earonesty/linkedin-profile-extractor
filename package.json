@@ -13,7 +13,8 @@
     "test:fixtures": "vitest run tests/parser/",
     "clean": "rm -rf packages/*/dist apps/*/dist",
     "dev": "node scripts/build-bookmarklet.mjs && node scripts/serve-bookmarklet.mjs",
-    "fetch-details": "echo 'Paste scripts/fetch-details-bookmarklet.js into Chrome DevTools on a LinkedIn profile page'"
+    "capture-fixtures": "echo 'Paste scripts/capture-fixtures.js into Chrome DevTools on a LinkedIn profile page'",
+    "unpack-fixtures": "node scripts/unpack-fixtures.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
