@@ -126,7 +126,7 @@ export async function extractLinkedInProfile(
   if (options?.fetchDetailPages) {
     progress("fetching detail pages");
     try {
-      finalSections = await fetchAndParseDetailPages(doc, sections, progress);
+      finalSections = await fetchAndParseDetailPages(doc, sections, progress, warnings);
     } catch (err) {
       warnings.push(
         `Detail page fetch failed: ${err instanceof Error ? err.message : String(err)}`

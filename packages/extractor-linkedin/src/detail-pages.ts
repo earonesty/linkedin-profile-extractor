@@ -71,13 +71,33 @@ export function parseDetailPage(
   if (!parser) return [];
 
   const result = parser(container);
-  if (Array.isArray(result)) return result;
-  if (result && typeof result === "object") {
+  let items: unknown[];
+  if (Array.isArray(result)) {
+    items = result;
+  } else if (result && typeof result === "object") {
     const arrayProp = Object.values(result).find(Array.isArray);
-    if (arrayProp) return arrayProp as unknown[];
-    return [result];
+    if (arrayProp) {
+      items = arrayProp as unknown[];
+    } else {
+      items = [result];
+    }
+  } else {
+    return [];
   }
-  return [];
+
+  // Filter out page heading parsed as an item (e.g. {"title": "Experience", ...all nulls})
+  return items.filter((item) => {
+    if (!item || typeof item !== "object") return true;
+    const vals = Object.values(item as Record<string, unknown>);
+    const nonNull = vals.filter((v) => v != null);
+    if (nonNull.length !== 1) return true;
+    const sole = nonNull[0];
+    if (typeof sole !== "string") return true;
+    // Check if the sole value is just the section heading
+    const heading = DETAIL_SECTIONS[sectionId] ?? sectionId;
+    return sole.toLowerCase() !== heading.toLowerCase()
+      && sole.toLowerCase() !== sectionId.toLowerCase();
+  });
 }
 
 /**
@@ -145,6 +165,7 @@ export async function fetchAndParseDetailPages(
   doc: Document,
   existingSections: ExtractedSection[],
   onProgress?: (state: string) => void,
+  warnings?: string[],
 ): Promise<ExtractedSection[]> {
   const sectionIds = existingSections.map((s) => s.id);
   const detailUrls = collectDetailUrls(doc, sectionIds);
@@ -163,13 +184,17 @@ export async function fetchAndParseDetailPages(
         "_blank",
         "width=800,height=600,left=10000,top=10000"
       );
-      if (!popup) continue;
+      if (!popup) {
+        warnings?.push(`Detail page popup blocked for ${sectionId}`);
+        continue;
+      }
 
       // Keep focus on the main window
       try { popup.blur(); window.focus(); } catch {};
 
       const accessible = await waitForAccess(popup);
       if (!accessible) {
+        warnings?.push(`Detail page for ${sectionId} not accessible (cross-origin or timeout)`);
         popup.close();
         continue;
       }
@@ -186,8 +211,10 @@ export async function fetchAndParseDetailPages(
       if (idx >= 0 && items.length > enriched[idx].items.length) {
         enriched[idx] = { ...enriched[idx], items };
       }
-    } catch {
-      // Silently skip — detail page fetch is best-effort
+    } catch (err) {
+      warnings?.push(
+        `Detail page fetch for ${sectionId} failed: ${err instanceof Error ? err.message : String(err)}`
+      );
     } finally {
       try {
         popup?.close();
