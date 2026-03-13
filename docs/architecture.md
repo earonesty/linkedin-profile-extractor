@@ -1,65 +1,81 @@
-# Architecture Overview
+# Architecture
 
-## Library-First Design
+## Library-first design
 
-The linkedin-profile-extractor is built as a reusable core extraction library. The core logic for discovering, parsing, and normalizing LinkedIn profile sections lives in shared packages that can be consumed by multiple frontends:
+The core extraction logic lives in shared packages that can be consumed by multiple frontends (bookmarklet, Chrome extension, etc.). Extraction logic is tested and iterated on independently of delivery mechanism.
 
-- **Bookmarklet** -- the primary consumer; a single-click tool that runs the extraction pipeline in the user's browser session.
-- **External Chrome Extension** -- an alternative consumer that can reuse the same extraction and schema packages with its own UI and lifecycle.
-
-This separation means extraction logic is tested and iterated on independently of delivery mechanism.
-
-## Workspace Monorepo Layout
+## Packages
 
 | Package | Description |
 |---------|-------------|
-| `packages/schema` | TypeScript types and Zod schemas for the normalized profile data model |
-| `packages/extractor-core` | DOM traversal, section discovery, parser registry, normalization pipeline |
+| `packages/schema` | TypeScript types and JSON Resume adapter |
+| `packages/extractor-core` | Validation, scrolling, section discovery, parser registry |
 | `packages/extractor-linkedin` | LinkedIn-specific parsers (experience, education, skills, etc.) |
-| `packages/transports` | Export adapters: JSON file download, clipboard, postMessage relay |
-| `packages/ui-overlay` | Lightweight in-page overlay UI (progress, preview, download button) |
-| `packages/bookmarklet` | Loader + runtime bundle that wires everything together for bookmarklet delivery |
+| `packages/ui-overlay` | In-page overlay UI for extraction progress |
+| `packages/transport-download` | Download profile as JSON file |
+| `packages/transport-clipboard` | Copy profile JSON to clipboard |
+| `packages/transport-webhook` | POST profile to a webhook endpoint |
+| `apps/bookmarklet` | Inline bookmarklet that wires everything together |
 
-## Data Flow
-
-The extraction pipeline follows a fixed sequence:
-
-```
-validate --> expand --> scroll --> discover --> parse --> normalize --> export
-```
-
-1. **Validate** -- Confirm we are on a LinkedIn profile page and the DOM is in an expected state.
-2. **Expand** -- Click "Show all" / "See more" buttons to reveal collapsed content.
-3. **Scroll** -- Scroll the page to trigger lazy-loaded sections.
-4. **Discover** -- Locate profile sections using `data-view-name` anchors, with `h2` heading fallback.
-5. **Parse** -- Route each discovered section to its registered parser; extract structured items.
-6. **Normalize** -- Map parsed items to the canonical schema, filling defaults and stripping noise.
-7. **Export** -- Hand the normalized profile object to the chosen transport (download, clipboard, etc.).
-
-## Package Dependency Graph
+## Dependency graph
 
 ```
-schema
+schema                         (zero deps, leaf node)
   ^
-  |
-extractor-core
+extractor-core                 (depends on schema)
   ^
-  |
-extractor-linkedin
+extractor-linkedin             (depends on extractor-core)
 
-transports  ------>  schema
-ui-overlay           (standalone, no package deps)
+transport-*  -----> schema     (type definitions only)
+ui-overlay                     (standalone, no cross-package deps)
 
-bookmarklet  ------> extractor-linkedin
-             ------> transports
-             ------> ui-overlay
+bookmarklet  -----> extractor-linkedin + transport-* + ui-overlay
 ```
 
-Key constraints:
+## Data flow
 
-- `schema` has zero internal dependencies; it is the leaf node.
-- `extractor-core` depends only on `schema`.
-- `extractor-linkedin` depends on `extractor-core` (and transitively `schema`).
-- `transports` depend on `schema` for type definitions but not on extraction packages.
-- `ui-overlay` is standalone with no cross-package dependencies.
-- `bookmarklet` is the composition root that pulls everything together.
+```
+validate → expand → scroll → discover → parse → export
+```
+
+1. **Validate** — Confirm we are on a LinkedIn profile page.
+2. **Expand** — Click "Show all" / "See more" buttons to reveal collapsed content.
+3. **Scroll** — Scroll the page to trigger lazy-loaded sections.
+4. **Discover** — Locate profile sections using `data-view-name` anchors, with `h2` heading fallback.
+5. **Parse** — Route each section to its registered parser; extract structured items.
+6. **Export** — Hand the result to the chosen transport (download, clipboard, webhook).
+
+## Section discovery
+
+Sections are located using a tiered strategy:
+
+1. **`data-view-name` anchors** — LinkedIn decorates sections with `data-view-name="profile-card-*"` attributes. These are checked first.
+2. **`h2` heading fallback** — When anchors are absent, `h2` text is matched against known labels.
+3. **Warnings** — Unidentified sections emit a warning. Their raw HTML is still captured.
+
+LinkedIn UI chrome sections (highlights, insights, pymk recommendations, promo) are filtered out during discovery.
+
+## Parser design
+
+Every parser takes a DOM `Element` and returns an array of typed items:
+
+```ts
+(element: Element) => T[]  // e.g., ExperienceItem[], EducationItem[]
+```
+
+Parsers use **structural DOM logic** rather than CSS classes or English-language string matching:
+
+- `data-view-name`, `aria-label`, `role` attributes for identification
+- `<figure>` siblings to detect association lines (e.g., "Associated with School")
+- `/skill-associations/` links to identify endorsement metadata
+- `/details/` and `/overlay/` hrefs to identify navigation chrome
+- DOM depth to distinguish content layers (e.g., shallowest `<p>` = skill name in skills section)
+- `<button>`, `<video>`, `[role="dialog"]`, `[aria-hidden]` removal for noise cleanup
+
+Sections without a registered parser still preserve `raw_html` and `raw_text` as fallback.
+
+## Bookmarklet
+
+The bookmarklet is built as a single inline `javascript:` URL containing the entire minified runtime (~30KB). This avoids CSP issues — LinkedIn blocks `<script src>` injection but allows `javascript:` URLs.
+
+Build: `pnpm run build` produces `apps/bookmarklet/dist/index.html` with the bookmarklet link.
