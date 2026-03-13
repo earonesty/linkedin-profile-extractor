@@ -6,7 +6,7 @@ Parsers rely on LinkedIn's DOM structure, which is not a stable API. LinkedIn ca
 
 ## Only extracts visible content
 
-The extractor reads what is present in the DOM of the currently loaded page. It does not make network requests to LinkedIn's servers. Only data visible to the logged-in user is available.
+The extractor reads what is present in the DOM. It does not make network requests to LinkedIn's servers. Only data visible to the logged-in user is available. With `fetchDetailPages` enabled, the extractor opens `/details/` pages in popups to get complete section data — but popups may be blocked by the browser, and some detail pages may fail to render in time.
 
 ## Lazy-loaded content requires scrolling
 
