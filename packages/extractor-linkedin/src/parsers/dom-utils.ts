@@ -77,6 +77,20 @@ function removeNoiseElements(el: Element): void {
     }
   }
 
+  // Skill endorsement blocks: a <p> tag next to an <a> linking to
+  // /skill-associations/ is an endorsement summary, not profile content.
+  // Remove the <a> and its sibling <p> together.
+  const skillLinks = el.querySelectorAll('a[href*="skill-associations"]');
+  for (const a of Array.from(skillLinks)) {
+    const parent = a.parentElement;
+    if (parent) {
+      // Remove sibling <p> tags (the endorsement text)
+      const siblingPs = parent.querySelectorAll(":scope > p");
+      for (const p of Array.from(siblingPs)) p.remove();
+    }
+    a.remove();
+  }
+
   // Video players and their control menus
   const videos = el.querySelectorAll("video");
   for (const v of Array.from(videos)) {

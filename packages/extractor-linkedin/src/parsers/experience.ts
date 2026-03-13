@@ -11,6 +11,8 @@ import type { ExperienceItem } from "@liex/schema";
  *   - Company link to /company/ID/
  *   - <p> tags for: title, company+type, date range, location
  *   - Description in <p><span>...</span></p>
+ *   - Skill endorsement <p> (removed structurally by dom-utils via
+ *     /skill-associations/ link detection)
  */
 export function parseExperience(el: Element): ExperienceItem[] {
   const items: ExperienceItem[] = [];
@@ -25,7 +27,8 @@ export function parseExperience(el: Element): ExperienceItem[] {
 }
 
 function parseExperienceItem(el: Element): ExperienceItem | null {
-  // getCleanPTexts strips <button> ("… more") and /details/ links ("Show all")
+  // getCleanPTexts strips buttons, /details/ nav links, /skill-associations/
+  // endorsement blocks, and other UI chrome
   const pTexts = getCleanPTexts(el);
   if (pTexts.length === 0) return null;
 
@@ -40,23 +43,14 @@ function parseExperienceItem(el: Element): ExperienceItem | null {
     }
   }
 
-  // Parse <p> tag contents positionally:
-  // p[0]: title
-  // p[1]: company + employment type (has · separator)
-  // p[2]: date range (has month/year pattern)
-  // p[3]: location
-  // Remaining: description
-
   let title: string | null = null;
   let date_range_raw: string | null = null;
   let location: string | null = null;
   let description: string | null = null;
 
   for (const text of pTexts) {
-    // Skip text that duplicates the company we already found from aria-label
-    if (company && text === company) continue;
-    // Skip skill endorsement lines ("Leadership, Machine Learning and +1 skill")
-    if (isSkillEndorsement(text)) continue;
+    // Skip text that duplicates the company (e.g. "Puzzle 🧩🚀 · Full-time")
+    if (company && (text === company || text.startsWith(company + " "))) continue;
     if (isDateRange(text) && !date_range_raw) {
       date_range_raw = text;
     } else if (!title && text.length < 200) {
@@ -66,9 +60,9 @@ function parseExperienceItem(el: Element): ExperienceItem | null {
       company = text;
     } else if (title && !date_range_raw && !company && text.length < 150) {
       company = text;
-    } else if (date_range_raw && !location && text.length < 100 && !isCompanyTypeLine(text)) {
+    } else if (date_range_raw && !location && text.length < 100) {
       location = text;
-    } else if (!description && text.length > 20 && !isCompanyTypeLine(text)) {
+    } else if (!description && text.length > 20) {
       description = text;
     }
   }
@@ -76,19 +70,6 @@ function parseExperienceItem(el: Element): ExperienceItem | null {
   if (!title && !company) return null;
 
   return { title, company, date_range_raw, location, description };
-}
-
-/** Skill endorsement lines: "Leadership, Machine Learning and +1 skill" */
-function isSkillEndorsement(text: string): boolean {
-  return /and \+\d+ skills?$/i.test(text);
-}
-
-/** Company+type lines like "Company · Full-time" when company is already found */
-function isCompanyTypeLine(text: string): boolean {
-  return (
-    text.includes("·") &&
-    /\b(full-time|part-time|contract|freelance|internship|self-employed|seasonal|apprenticeship)\b/i.test(text)
-  );
 }
 
 function isDateRange(text: string): boolean {

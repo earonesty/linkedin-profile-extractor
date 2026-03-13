@@ -137,12 +137,18 @@ describe("real LinkedIn DOM (earonesty)", () => {
       }
     });
 
-    it("location is not a skills endorsement line", () => {
+    it("excludes skill endorsement text from all fields", () => {
       const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
       const items = parseExperience(el);
       for (const item of items) {
-        if (item.location) {
-          expect(item.location).not.toMatch(/and \+\d+ skills?$/i);
+        const fields = [item.title, item.location, item.description].filter(Boolean);
+        for (const f of fields) {
+          // No "+N skill" endorsement lines
+          expect(f).not.toMatch(/and \+\d+ skills?$/i);
+          // No bare skill lists that were endorsement metadata
+          expect(f).not.toBe("Product Strategy and Technical Architecture");
+          expect(f).not.toBe("Leadership, Machine Learning and +1 skill");
+          expect(f).not.toBe("Leadership, Product Strategy and +1 skill");
         }
       }
     });
@@ -207,6 +213,16 @@ describe("real LinkedIn DOM (earonesty)", () => {
       const el = doc.querySelector('[data-view-name="profile-card-projects"]')!;
       const items = parseProjects(el);
       expect(items.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("description is not 'Associated with' text", () => {
+      const el = doc.querySelector('[data-view-name="profile-card-projects"]')!;
+      const items = parseProjects(el);
+      for (const item of items) {
+        if (item.description) {
+          expect(item.description).not.toMatch(/^associated with/i);
+        }
+      }
     });
   });
 

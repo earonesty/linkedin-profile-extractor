@@ -21,7 +21,7 @@ export function parseProjects(el: Element): ProjectItem[] {
 }
 
 function parseProjectItem(el: Element): ProjectItem | null {
-  const pTexts = getCleanPTexts(el);
+  const pTexts = getCleanPTextsNoFigureSiblings(el);
   if (pTexts.length === 0) return null;
 
   // Find external URL: LinkedIn wraps external links through redir/redirect
@@ -52,6 +52,21 @@ function parseProjectItem(el: Element): ProjectItem | null {
 
   if (!name) return null;
   return { name, description, date_range_raw, url };
+}
+
+/** Like getCleanPTexts but excludes <p> tags whose parent contains a <figure> (association lines) */
+function getCleanPTextsNoFigureSiblings(el: Element): string[] {
+  const raw = getCleanPTexts(el);
+  const ps = el.querySelectorAll("p");
+  const figureSiblingTexts = new Set<string>();
+  for (const p of Array.from(ps)) {
+    const parent = p.parentElement;
+    if (parent && parent.querySelector("figure")) {
+      const t = (p.textContent ?? "").trim();
+      if (t) figureSiblingTexts.add(t);
+    }
+  }
+  return raw.filter((t) => !figureSiblingTexts.has(t));
 }
 
 function isDateRange(text: string): boolean {
