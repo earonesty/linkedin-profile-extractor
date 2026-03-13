@@ -33,6 +33,8 @@ export type ExtractOptions = {
   expandSections?: boolean;
   scrollPage?: boolean;
   includeRawHtml?: boolean;
+  /** Fetch /details/ pages to get complete section data (all items, not just visible ones). */
+  fetchDetailPages?: boolean;
 };
 
 export type AboutSection = {
@@ -101,6 +103,7 @@ export type OverlayState =
   | "scrolling"
   | "extracting"
   | "normalizing"
+  | "fetching detail pages"
   | "exporting"
   | "complete"
   | "error";

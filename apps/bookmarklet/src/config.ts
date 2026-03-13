@@ -18,6 +18,8 @@ export type BookmarkletConfig = {
   expandSections?: boolean;
   /** Whether to scroll the page to load lazy content (default: true) */
   scrollPage?: boolean;
+  /** Whether to fetch /details/ pages for complete section data (default: false) */
+  fetchDetailPages?: boolean;
 };
 
 declare global {

@@ -19,6 +19,7 @@ import {
   discoverSections,
 } from "@liex/extractor-core";
 import { parseTopCard, getParser } from "./registry";
+import { fetchAndParseDetailPages } from "./detail-pages";
 
 export async function extractLinkedInProfile(
   doc: Document,
@@ -120,7 +121,20 @@ export async function extractLinkedInProfile(
     });
   }
 
-  // Step 7: Build result
+  // Step 7: Fetch detail pages for complete section data
+  let finalSections = sections;
+  if (options?.fetchDetailPages) {
+    progress("fetching detail pages");
+    try {
+      finalSections = await fetchAndParseDetailPages(doc, sections, progress);
+    } catch (err) {
+      warnings.push(
+        `Detail page fetch failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  // Step 8: Build result
   const result: LinkedInExport = {
     source: {
       platform: "linkedin",
@@ -128,7 +142,7 @@ export async function extractLinkedInProfile(
       captured_at: new Date().toISOString(),
     },
     top_card,
-    sections,
+    sections: finalSections,
     warnings,
   };
 

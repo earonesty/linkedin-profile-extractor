@@ -8,6 +8,7 @@ const STATE_LABELS: Record<string, string> = {
   scrolling: "Scrolling profile…",
   extracting: "Extracting data…",
   normalizing: "Normalizing output…",
+  "fetching detail pages": "Fetching detail pages…",
   exporting: "Exporting…",
   complete: "Complete!",
   error: "Error",

@@ -26,6 +26,7 @@ async function run(): Promise<void> {
       onProgress: (state) => overlay.setState(state),
       expandSections: config.expandSections ?? true,
       scrollPage: config.scrollPage ?? true,
+      fetchDetailPages: config.fetchDetailPages ?? false,
     });
 
     // Step 6: Show actions

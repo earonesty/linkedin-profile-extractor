@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:fixtures": "vitest run tests/parser/",
     "clean": "rm -rf packages/*/dist apps/*/dist",
-    "dev": "node scripts/build-bookmarklet.mjs && node scripts/serve-bookmarklet.mjs"
+    "dev": "node scripts/build-bookmarklet.mjs && node scripts/serve-bookmarklet.mjs",
+    "fetch-details": "echo 'Paste scripts/fetch-details-bookmarklet.js into Chrome DevTools on a LinkedIn profile page'"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
