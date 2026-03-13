@@ -24,7 +24,7 @@ pnpm run build              # builds everything
 pnpm run dev                # serves bookmarklet locally for testing
 ```
 
-Copy the bookmarklet URL from `apps/bookmarklet/dist/index.html`, save it as a browser bookmark, then click it on any LinkedIn profile page.
+Open `http://localhost:3333`, toggle "Fetch all detail pages" if you want complete section data, then drag the bookmarklet link to your bookmarks bar. Click it on any LinkedIn profile page.
 
 ## Consuming as a library
 
@@ -36,6 +36,7 @@ const data = await extractLinkedInProfile(document, {
   expandSections: true,
   scrollPage: true,
   includeRawHtml: false,
+  fetchDetailPages: true,  // open /details/ pages to get all items per section
 });
 downloadProfile(data);
 ```
@@ -133,7 +134,28 @@ tests/
 
 ```bash
 pnpm test                  # all tests
-pnpm vitest run            # parser tests only
+pnpm test:fixtures         # parser tests only
+```
+
+### Capturing new fixtures
+
+To update the test fixtures from a real LinkedIn profile:
+
+```bash
+# 1. Copy the capture script to clipboard
+cat scripts/capture-fixtures.js | clip.exe      # WSL
+cat scripts/capture-fixtures.js | xclip -sel c  # Linux
+cat scripts/capture-fixtures.js | pbcopy        # macOS
+
+# 2. Navigate to a LinkedIn profile in Chrome, open DevTools (F12),
+#    paste the script into Console and press Enter.
+#    Allow popups if prompted. A single JSON file downloads.
+
+# 3. Unpack into fixture files
+pnpm unpack-fixtures ~/Downloads/fixtures-username.json
+
+# 4. Run tests against the new fixtures
+pnpm test
 ```
 
 Playwright tests (opt-in, requires LinkedIn auth):

@@ -35,7 +35,7 @@ bookmarklet  -----> extractor-linkedin + transport-* + ui-overlay
 ## Data flow
 
 ```
-validate → expand → scroll → discover → parse → export
+validate → expand → scroll → discover → parse → [fetch detail pages] → export
 ```
 
 1. **Validate** — Confirm we are on a LinkedIn profile page.
@@ -43,7 +43,8 @@ validate → expand → scroll → discover → parse → export
 3. **Scroll** — Scroll the page to trigger lazy-loaded sections.
 4. **Discover** — Locate profile sections using `data-view-name` anchors, with `h2` heading fallback.
 5. **Parse** — Route each section to its registered parser; extract structured items.
-6. **Export** — Hand the result to the chosen transport (download, clipboard, webhook).
+6. **Fetch detail pages** (opt-in) — Open each section's `/details/` page in a popup to get all items, not just the subset shown on the profile page. Replaces section items when the detail page has more data.
+7. **Export** — Hand the result to the chosen transport (download, clipboard, webhook).
 
 ## Section discovery
 
@@ -78,4 +79,16 @@ Sections without a registered parser still preserve `raw_html` and `raw_text` as
 
 The bookmarklet is built as a single inline `javascript:` URL containing the entire minified runtime (~30KB). This avoids CSP issues — LinkedIn blocks `<script src>` injection but allows `javascript:` URLs.
 
-Build: `pnpm run build` produces `apps/bookmarklet/dist/index.html` with the bookmarklet link.
+Build: `pnpm run build` produces `apps/bookmarklet/dist/index.html` with the bookmarklet link. The install page includes a toggle for "Fetch all detail pages" which produces a variant bookmarklet with `fetchDetailPages: true` baked in.
+
+## Detail page fetching
+
+LinkedIn profile pages show a limited subset of items per section. The full data lives on `/details/{section}/` pages which are client-side rendered SPAs.
+
+When `fetchDetailPages: true`, the extractor opens each detail page in a small off-screen popup, waits for LinkedIn's client-side rendering, scrolls to trigger lazy loading, then parses the result using the same section parsers. If the detail page yields more items than the profile page, the section's items are replaced.
+
+Supported detail sections: experience, education, skills, projects, publications, courses, certifications.
+
+## Fixture capture
+
+Test fixtures are captured from real LinkedIn profiles using `scripts/capture-fixtures.js` (pasted into Chrome DevTools). This captures the main profile page plus all detail pages into a single JSON bundle, which is unpacked into individual fixture files by `scripts/unpack-fixtures.mjs`.
