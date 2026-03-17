@@ -123,7 +123,7 @@ describe("discoverSections", () => {
 
       // fallback-sections.html has no data-view-name on any element
       expect(result.topCard).toBeNull();
-      expect(warnings).toContain("Top card not found via data-view-name anchor");
+      expect(warnings).toContain("Top card not found via data-view-name or componentkey anchor");
     });
   });
 });

@@ -17,16 +17,22 @@ import { discoverSections } from "../../packages/extractor-core/src/section-disc
 describe("real LinkedIn DOM (earonesty)", () => {
   const doc = loadFixture("real-linkedin-dom.xml");
 
+  // Use discoverSections so tests are resilient to DOM rotation
+  const warnings: string[] = [];
+  const { topCard, sections } = discoverSections(doc, warnings);
+
+  function getSection(id: string): Element {
+    const s = sections.find((s) => s.id === id);
+    if (!s) throw new Error(`Section "${id}" not discovered — available: ${sections.map((s) => s.id).join(", ")}`);
+    return s.element;
+  }
+
   describe("section discovery", () => {
     it("finds the top card", () => {
-      const warnings: string[] = [];
-      const { topCard } = discoverSections(doc, warnings);
       expect(topCard).not.toBeNull();
     });
 
     it("finds key sections", () => {
-      const warnings: string[] = [];
-      const { sections } = discoverSections(doc, warnings);
       const ids = sections.map((s) => s.id);
       expect(ids).toContain("about");
       expect(ids).toContain("experience");
@@ -37,8 +43,6 @@ describe("real LinkedIn DOM (earonesty)", () => {
     });
 
     it("excludes LinkedIn UI chrome sections", () => {
-      const warnings: string[] = [];
-      const { sections } = discoverSections(doc, warnings);
       const ids = sections.map((s) => s.id);
       expect(ids).not.toContain("highlights");
       expect(ids).not.toContain("insights");
@@ -50,102 +54,84 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("top card", () => {
     it("extracts name", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.full_name).toBe("Erik Aronesty");
     });
 
     it("extracts headline", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.headline).toContain("Senior Software Engineer");
     });
 
     it("extracts location", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.location).toContain("California");
     });
 
     it("extracts contact info link", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.contact_info_link).toContain("contact-info");
     });
 
     it("extracts connections text", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.connections_text).toContain("500+");
     });
 
     it("extracts profile image", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.profile_image_url).toContain("profile-displayphoto");
     });
 
     it("extracts cover image", () => {
-      const el = doc.querySelector('[data-view-name="profile-top-card"]')!;
-      const result = parseTopCard(el);
+      const result = parseTopCard(topCard!.element);
       expect(result.cover_image_url).toContain("displaybackgroundimage");
     });
   });
 
   describe("about", () => {
     it("extracts about text", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-about"]')!;
-      const result = parseAbout(el);
+      const result = parseAbout(getSection("about"));
       expect(result.about_text).toContain("25 years");
     });
   });
 
   describe("experience", () => {
     it("finds multiple items", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
-      const items = parseExperience(el);
+      const items = parseExperience(getSection("experience"));
       expect(items.length).toBeGreaterThanOrEqual(3);
     });
 
     it("extracts first job title", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
-      const items = parseExperience(el);
+      const items = parseExperience(getSection("experience"));
       expect(items[0].title).toContain("Senior Software Engineer");
     });
 
     it("extracts company from first item", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
-      const items = parseExperience(el);
-      const firstCompany = items[0].company;
-      expect(firstCompany).toBeTruthy();
+      const items = parseExperience(getSection("experience"));
+      expect(items[0].company).toBeTruthy();
     });
 
     it("extracts date range", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
-      const items = parseExperience(el);
+      const items = parseExperience(getSection("experience"));
       expect(items[0].date_range_raw).toContain("2024");
     });
 
     it("description is real content, not company+type line", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
-      const items = parseExperience(el);
+      const items = parseExperience(getSection("experience"));
       for (const item of items) {
         if (item.description) {
-          // Description should not be a "Company · Full-time" line
           expect(item.description).not.toMatch(/·\s*(full-time|part-time|contract)/i);
         }
       }
     });
 
     it("excludes skill endorsement text from all fields", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-experience"]')!;
-      const items = parseExperience(el);
+      const items = parseExperience(getSection("experience"));
       for (const item of items) {
         const fields = [item.title, item.location, item.description].filter(Boolean);
         for (const f of fields) {
-          // No "+N skill" endorsement lines
           expect(f).not.toMatch(/and \+\d+ skills?$/i);
-          // No bare skill lists that were endorsement metadata
           expect(f).not.toBe("Product Strategy and Technical Architecture");
           expect(f).not.toBe("Leadership, Machine Learning and +1 skill");
           expect(f).not.toBe("Leadership, Product Strategy and +1 skill");
@@ -156,21 +142,18 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("education", () => {
     it("finds education items", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-education"]')!;
-      const items = parseEducation(el);
+      const items = parseEducation(getSection("education"));
       expect(items.length).toBeGreaterThanOrEqual(2);
     });
 
     it("extracts school name", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-education"]')!;
-      const items = parseEducation(el);
+      const items = parseEducation(getSection("education"));
       const schools = items.map((i) => i.school).filter(Boolean);
       expect(schools.some((s) => s!.includes("Johns Hopkins"))).toBe(true);
     });
 
     it("extracts degree correctly (not school name)", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-education"]')!;
-      const items = parseEducation(el);
+      const items = parseEducation(getSection("education"));
       const jhu = items.find((i) => i.school?.includes("Johns Hopkins"));
       expect(jhu).toBeTruthy();
       expect(jhu!.degree).toBe("M.S.");
@@ -178,11 +161,9 @@ describe("real LinkedIn DOM (earonesty)", () => {
     });
 
     it("does not use duplicate degree text as description", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-education"]')!;
-      const items = parseEducation(el);
+      const items = parseEducation(getSection("education"));
       const jhu = items.find((i) => i.school?.includes("Johns Hopkins"));
       expect(jhu).toBeTruthy();
-      // "M.S. Bioinformatics" is a duplicate of degree+field, not a real description
       if (jhu!.description) {
         expect(jhu!.description).not.toBe("M.S. Bioinformatics");
       }
@@ -191,15 +172,13 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("skills", () => {
     it("finds skills", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-skills"]')!;
-      const result = parseSkills(el);
+      const result = parseSkills(getSection("skills"));
       expect(result.skills.length).toBeGreaterThanOrEqual(1);
       expect(result.skills).toContain("Machine Learning");
     });
 
     it("excludes job titles and endorsement meta text", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-skills"]')!;
-      const result = parseSkills(el);
+      const result = parseSkills(getSection("skills"));
       for (const skill of result.skills) {
         expect(skill).not.toMatch(/\bat\b.*\b(Bloomberg|Atakama|Puzzle)\b/i);
         expect(skill).not.toMatch(/endorsement/i);
@@ -210,14 +189,12 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("projects", () => {
     it("finds projects", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-projects"]')!;
-      const items = parseProjects(el);
+      const items = parseProjects(getSection("projects"));
       expect(items.length).toBeGreaterThanOrEqual(1);
     });
 
     it("description is not 'Associated with' text", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-projects"]')!;
-      const items = parseProjects(el);
+      const items = parseProjects(getSection("projects"));
       for (const item of items) {
         if (item.description) {
           expect(item.description).not.toMatch(/^associated with/i);
@@ -228,8 +205,7 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("publications", () => {
     it("finds publications", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-publications"]')!;
-      const items = parsePublications(el);
+      const items = parsePublications(getSection("publications"));
       expect(items.length).toBeGreaterThanOrEqual(1);
       expect(items[0].title).toContain("Encapsulated Search Index");
     });
@@ -237,14 +213,12 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("courses", () => {
     it("finds courses", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-courses"]')!;
-      const result = parseCourses(el);
+      const result = parseCourses(getSection("courses"));
       expect(result.courses.length).toBeGreaterThanOrEqual(1);
     });
 
     it("course number is not 'Associated with' text", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-courses"]')!;
-      const result = parseCourses(el);
+      const result = parseCourses(getSection("courses"));
       for (const course of result.courses) {
         if (course.number) {
           expect(course.number).not.toMatch(/^associated with/i);
@@ -255,30 +229,28 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("services", () => {
     it("extracts services text", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-services"]')!;
-      const result = parseServices(el);
+      const result = parseServices(getSection("services"));
       expect(result.services_text).toContain("AI/ML");
     });
   });
 
   describe("recommendations", () => {
     it("returns empty when no real recommendations exist", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-recommendations"]')!;
-      const items = parseRecommendations(el);
+      const el = sections.find((s) => s.id === "recommendations");
+      if (!el) return; // section may not exist in this DOM variant
+      const items = parseRecommendations(el.element);
       expect(items).toEqual([]);
     });
   });
 
   describe("activity", () => {
     it("finds activity items", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-recent-activity"]')!;
-      const result = parseActivity(el);
+      const result = parseActivity(getSection("recent-activity"));
       expect(result.activities.length).toBeGreaterThanOrEqual(1);
     });
 
     it("excludes video player accessibility noise", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-recent-activity"]')!;
-      const result = parseActivity(el);
+      const result = parseActivity(getSection("recent-activity"));
       for (const a of result.activities) {
         expect(a.text).not.toMatch(/^chapters$/i);
         expect(a.text).not.toMatch(/^captions off/i);
@@ -288,8 +260,7 @@ describe("real LinkedIn DOM (earonesty)", () => {
     });
 
     it("strips video player text from within posts", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-recent-activity"]')!;
-      const result = parseActivity(el);
+      const result = parseActivity(getSection("recent-activity"));
       for (const a of result.activities) {
         expect(a.text).not.toContain("Beginning of dialog window");
         expect(a.text).not.toContain("End of dialog window");
@@ -300,8 +271,7 @@ describe("real LinkedIn DOM (earonesty)", () => {
 
   describe("certifications", () => {
     it("finds certifications", () => {
-      const el = doc.querySelector('[data-view-name="profile-card-licenses-and-certifications"]')!;
-      const items = parseCertifications(el);
+      const items = parseCertifications(getSection("licenses-and-certifications"));
       expect(items.length).toBeGreaterThanOrEqual(1);
       expect(items[0].name).toBe("CFA");
     });

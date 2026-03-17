@@ -61,13 +61,16 @@ export function discoverSections(
   doc: Document,
   warnings: string[]
 ): { topCard: DiscoveredSection | null; sections: DiscoveredSection[] } {
-  // Step 1: Find top card
+  // Step 1: Find top card (try multiple strategies for DOM rotation resilience)
   let topCard: DiscoveredSection | null = null;
-  const topCardEl = doc.querySelector('[data-view-name="profile-top-card"]');
+  const topCardEl =
+    doc.querySelector('[data-view-name="profile-top-card"]') ??
+    doc.querySelector('[componentkey*="Topcard"]') ??
+    doc.querySelector('[componentkey*="topcard"]');
   if (topCardEl) {
     topCard = { id: "top-card", heading: null, element: topCardEl };
   } else {
-    warnings.push("Top card not found via data-view-name anchor");
+    warnings.push("Top card not found via data-view-name or componentkey anchor");
   }
 
   // Sections that are LinkedIn UI chrome, not profile content
@@ -81,7 +84,7 @@ export function discoverSections(
     "promo",
   ]);
 
-  // Step 2: Find profile-card-* sections
+  // Step 2: Find profile-card-* sections via data-view-name
   const found = new Map<string, DiscoveredSection>();
   const cardEls = doc.querySelectorAll('[data-view-name^="profile-card-"]');
   for (const el of Array.from(cardEls)) {
@@ -90,6 +93,36 @@ export function discoverSections(
     if (IGNORED_SECTIONS.has(id)) continue;
     if (!found.has(id)) {
       found.set(id, { id, heading: extractHeading(el), element: el });
+    }
+  }
+
+  // Step 2b: componentkey-based discovery (LinkedIn rotates DOM structures)
+  // Pattern: componentkey="com.linkedin.sdui.profile.card.ref<user><SectionName>"
+  if (found.size === 0) {
+    const COMPONENTKEY_TO_ID: Record<string, string> = {
+      about: "about",
+      services: "services",
+      featured: "featured",
+      experiencetoplevelsection: "experience",
+      educationtoplevelsection: "education",
+      certificationtoplevel: "licenses-and-certifications",
+      projects: "projects",
+      skills: "skills",
+      recommendations: "recommendations",
+      publicationtoplevelsection: "publications",
+      coursetoplevelsection: "courses",
+      interests: "interests",
+    };
+    const ckEls = doc.querySelectorAll("[componentkey]");
+    for (const el of Array.from(ckEls)) {
+      const ck = (el.getAttribute("componentkey") ?? "").toLowerCase();
+      if (!ck.startsWith("com.linkedin.sdui.profile.card.ref")) continue;
+      for (const [suffix, id] of Object.entries(COMPONENTKEY_TO_ID)) {
+        if (ck.endsWith(suffix) && !found.has(id)) {
+          found.set(id, { id, heading: extractHeading(el), element: el });
+          break;
+        }
+      }
     }
   }
 
